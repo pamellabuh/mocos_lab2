@@ -136,7 +136,6 @@ public:
     }
 };
 
-// Загрузка сигнала
 Sequence load_signal(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
