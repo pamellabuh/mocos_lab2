@@ -1,1 +1,0 @@
-# mocos_lab2

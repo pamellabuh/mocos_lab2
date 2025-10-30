@@ -78,23 +78,13 @@ void writeBinaryFile(const vector<Complex>& data, const string& filename) {
 }
 
 int main() {
-    cout << "=== Вычисление ДПФ и ОДПФ ===" << endl;
-    
-    // Чтение входного сигнала
+    cout << "Вычисление ДПФ и ОДПФ: " << endl;
     vector<Complex> input = readBinaryFile("performance_signals/фиксированный_512.bin");
-    cout << "Загружено " << input.size() << " точек сигнала" << endl;
-    
-    // Прямое ДПФ
+    cout  << input.size() << " точек сигнала" << endl;
     vector<Complex> dft_result = computeDFT(input);
     writeBinaryFile(dft_result, "результат_ДПФ.bin");
-    cout << "ДПФ вычислено и сохранено" << endl;
-    
-    // Обратное ДПФ
     vector<Complex> idft_result = computeIDFT(dft_result);
     writeBinaryFile(idft_result, "результат_ОДПФ.bin");
-    cout << "ОДПФ вычислено и сохранено" << endl;
-    
-    // Проверка точности
     double max_error = 0.0;
     for (size_t i = 0; i < input.size(); i++) {
         double error = abs(input[i] - idft_result[i]);
