@@ -194,9 +194,7 @@ int main() {
         return 1;
     }
     std::cout << std::setw(8) << "L" << std::setw(15) << "Direct (ms)" 
-              << std::setw(15) << "FFT (ms)" << std::setw(12) << "Speedup" 
-              << std::setw(12) << "Lu" << std::setw(12) << "N_padded" << std::endl;
-    std::cout << std::string(70, '-') << std::endl;
+              << std::setw(15) << "FFT (ms)" << std::endl;
     
     std::vector<int> case1_sizes;
     std::vector<double> case1_direct, case1_fft;
@@ -209,15 +207,11 @@ int main() {
             auto times = measure_convolution_time(fixed_signal, var_signal, ITERATIONS);
             
             size_t Lu = fixed_signal.size() + var_signal.size() - 1;
-            size_t N_padded = FFTConvolution::next_power_of_two(Lu);
-            double speedup = times.first / times.second;
+
             
             std::cout << std::setw(8) << size 
                       << std::setw(15) << std::fixed << std::setprecision(3) << times.first
-                      << std::setw(15) << std::fixed << std::setprecision(3) << times.second
-                      << std::setw(12) << std::fixed << std::setprecision(1) << speedup << "x"
-                      << std::setw(12) << Lu
-                      << std::setw(12) << N_padded << std::endl;
+                      << std::setw(15) << std::fixed << std::setprecision(3) << times.second << std::endl;
             
             case1_sizes.push_back(size);
             case1_direct.push_back(times.first);
@@ -229,9 +223,7 @@ int main() {
     }
     
     std::cout << std::setw(8) << "N" << std::setw(15) << "Direct (ms)" 
-              << std::setw(15) << "FFT (ms)" << std::setw(12) << "Speedup" 
-              << std::setw(12) << "Lu" << std::setw(12) << "N_padded" << std::endl;
-    std::cout << std::string(70, '-') << std::endl;
+              << std::setw(15) << "FFT (ms)"  << std::endl;
     
     std::vector<int> case2_sizes;
     std::vector<double> case2_direct, case2_fft;
@@ -245,15 +237,10 @@ int main() {
             auto times = measure_convolution_time(signal1, signal2, ITERATIONS);
             
             size_t Lu = signal1.size() + signal2.size() - 1;
-            size_t N_padded = FFTConvolution::next_power_of_two(Lu);
-            double speedup = times.first / times.second;
             
             std::cout << std::setw(8) << size 
                       << std::setw(15) << std::fixed << std::setprecision(3) << times.first
-                      << std::setw(15) << std::fixed << std::setprecision(3) << times.second
-                      << std::setw(12) << std::fixed << std::setprecision(1) << speedup << "x"
-                      << std::setw(12) << Lu
-                      << std::setw(12) << N_padded << std::endl;
+                      << std::setw(15) << std::fixed << std::setprecision(3) << times.second << std::endl;
             
             case2_sizes.push_back(size);
             case2_direct.push_back(times.first);

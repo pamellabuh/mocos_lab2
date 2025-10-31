@@ -88,9 +88,7 @@ vector<Complex> readBinaryFile(const string& filename) {
     return signal;
 }
 
-// ================== Измерение времени ==================
 pair<double, double> measurePerformance(int N, int num_runs = 5) {
-    // Читаем сигнал из готового файла вместо генерации
     string filename = "performance_signals/переменный_" + to_string(N) + ".bin";
     vector<Complex> signal = readBinaryFile(filename);
     
