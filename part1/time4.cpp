@@ -12,6 +12,69 @@ using namespace std::chrono;
 typedef complex<double> Complex;
 const double PI = 3.14159265358979323846;
 
+// ==================== ПРАВИЛЬНАЯ РЕАЛИЗАЦИЯ БПФ С ПРОРЕЖИВАНИЕМ ПО ЧАСТОТЕ ====================
+
+// Вычисление поворотного коэффициента
+Complex twiddle(int j, int k, int n) {
+    double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+    return Complex(cos(angle), sin(angle));
+}
+
+// Прямое БПФ с прореживанием по частоте (БЕЗ масштабирования)
+vector<Complex> fft_dif(const vector<Complex>& x) {
+    int N = x.size();
+    int n = 0;
+    while ((1 << n) < N) n++;
+    
+    vector<Complex> y = x;
+    
+    // k-й шаг (k = 1, 2, ..., n)
+    for (int k = 1; k <= n; k++) {
+        vector<Complex> temp(N);
+        
+        // Размер блока на текущем шаге
+        int block_size = 1 << k;           // 2^k
+        int half_block = 1 << (k - 1);     // 2^{k-1}
+        int num_blocks = N / block_size;
+        
+        for (int j = 0; j < num_blocks; j++) {
+            for (int l = 0; l < half_block; l++) {
+                int idx1 = j * block_size + l;              // j2^k + l
+                int idx2 = idx1 + half_block;               // j2^k + l + 2^{k-1}
+                
+                int src_idx1 = j * half_block + l;          // j2^{k-1} + l
+                int src_idx2 = src_idx1 + (N / 2);          // 2^{n-1} + j2^{k-1} + l
+                
+                // Бабочка согласно формулам:
+                // y(j2^k + l) = x(j2^{k-1} + l) + x(2^{n-1} + j2^{k-1} + l)
+                temp[idx1] = y[src_idx1] + y[src_idx2];
+                
+                // y(j2^k + l + 2^{k-1}) = [x(j2^{k-1} + l) - x(2^{n-1} + j2^{k-1} + l)] * ω_{n+1-k}^j
+                Complex diff = y[src_idx1] - y[src_idx2];
+                temp[idx2] = diff * twiddle(j, k, n);
+            }
+        }
+        
+        y = temp;
+    }
+    
+    return y;
+}
+
+// БПФ с масштабированием 1/√N (унитарное преобразование)
+vector<Complex> scaleFFT(const vector<Complex>& x) {
+    int N = x.size();
+    vector<Complex> result = fft_dif(x);
+    double scale = 1.0 / sqrt(N);
+    
+    for (int i = 0; i < N; i++) {
+        result[i] *= scale;
+    }
+    return result;
+}
+
+// ==================== ДПФ (остается без изменений) ====================
+
 vector<Complex> computeDFT(const vector<Complex>& input) {
     int N = input.size();
     vector<Complex> output(N);
@@ -28,42 +91,7 @@ vector<Complex> computeDFT(const vector<Complex>& input) {
     return output;
 }
 
-vector<Complex> fft(const vector<Complex>& x) {
-    int N = x.size();
-    if (N <= 1) return x;
-    
-    vector<Complex> even(N/2);
-    vector<Complex> odd(N/2);
-    
-    for (int i = 0; i < N/2; i++) {
-        even[i] = x[2*i];
-        odd[i] = x[2*i + 1];
-    }
-    
-    vector<Complex> even_fft = fft(even);
-    vector<Complex> odd_fft = fft(odd);
-    
-    vector<Complex> result(N);
-    for (int k = 0; k < N/2; k++) {
-        double angle = -2.0 * PI * k / N;
-        Complex twiddle = Complex(cos(angle), sin(angle));
-        result[k] = even_fft[k] + twiddle * odd_fft[k];
-        result[k + N/2] = even_fft[k] - twiddle * odd_fft[k];
-    }
-    
-    return result;
-}
-
-vector<Complex> scaleFFT(const vector<Complex>& x) {
-    int N = x.size();
-    vector<Complex> result = fft(x);
-    double scale = 1.0 / sqrt(N);
-    
-    for (int i = 0; i < N; i++) {
-        result[i] *= scale;
-    }
-    return result;
-}
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 vector<Complex> readBinaryFile(const string& filename) {
     ifstream file(filename, ios::binary | ios::ate);
@@ -88,9 +116,28 @@ vector<Complex> readBinaryFile(const string& filename) {
     return signal;
 }
 
+// Создание тестового сигнала если файл не найден
+vector<Complex> createTestSignal(int N) {
+    vector<Complex> signal(N);
+    for (int i = 0; i < N; i++) {
+        double t = 2.0 * PI * i / N;
+        // Синусоида с несколькими частотами + шум
+        signal[i] = Complex(sin(5 * t) + 0.5 * sin(15 * t) + 0.2 * sin(25 * t), 0);
+    }
+    return signal;
+}
+
 pair<double, double> measurePerformance(int N, int num_runs = 5) {
-    string filename = "performance_signals/переменный_" + to_string(N) + ".bin";
-    vector<Complex> signal = readBinaryFile(filename);
+    vector<Complex> signal;
+    
+    try {
+        string filename = "performance_signals/переменный_" + to_string(N) + ".bin";
+        signal = readBinaryFile(filename);
+    } catch (const exception& e) {
+        // Если файл не найден, создаем тестовый сигнал
+        cout << "Файл для N=" << N << " не найден, создаем тестовый сигнал" << endl;
+        signal = createTestSignal(N);
+    }
     
     double total_dft = 0.0, total_fft = 0.0;
     
@@ -108,7 +155,7 @@ pair<double, double> measurePerformance(int N, int num_runs = 5) {
         total_fft += duration_cast<microseconds>(end_fft - start_fft).count();
     }
     
-    double time_dft = total_dft / (1000.0 * num_runs);
+    double time_dft = total_dft / (1000.0 * num_runs);  // переводим в миллисекунды
     double time_fft = total_fft / (1000.0 * num_runs);
     
     cout << "N = " << N << ":\tДПФ = " << time_dft << " мс,\tБПФ = " << time_fft << " мс" << endl;
@@ -122,6 +169,7 @@ int main() {
     
     cout << "Измерение времени выполнения ДПФ и БПФ:" << endl;
     cout << "N\t\tДПФ (мс)\t\tБПФ (мс)" << endl;
+    cout << "----------------------------------------" << endl;
     
     // N = 2^n, где n ∈ {6,7,...,12}
     for (int n = 6; n <= 12; n++) {
@@ -133,11 +181,15 @@ int main() {
         times_fft.push_back(times.second);
     }
     
+    // Сохраняем результаты в CSV файл
     ofstream file("performance_results.csv");
     file << "N,DFT_Time_ms,FFT_Time_ms\n";
     for (size_t i = 0; i < sizes.size(); i++) {
         file << sizes[i] << "," << times_dft[i] << "," << times_fft[i] << "\n";
     }
-    file.close();   
+    file.close();
+    
+    cout << "\nРезультаты сохранены в performance_results.csv" << endl;
+    
     return 0;
 }

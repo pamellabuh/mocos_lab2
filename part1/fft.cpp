@@ -9,75 +9,88 @@ using namespace std;
 typedef complex<double> Complex;
 const double PI = 3.14159265358979323846;
 
-// Прямое БПФ
-vector<Complex> fft(const vector<Complex>& x) {
-    int N = x.size();
-    if (N == 1) {
-        return x;
-    }
-    
-    vector<Complex> first_half(N/2);
-    vector<Complex> second_half(N/2);
-    
-    for (int k = 0; k < N/2; k++) {
-        first_half[k] = x[k] + x[k + N/2];
-        Complex temp = x[k] - x[k + N/2];
-        double angle = -2.0 * PI * k / N;
-        second_half[k] = temp * Complex(cos(angle), sin(angle));
-    }
-    
-    vector<Complex> first_fft = fft(first_half);
-    vector<Complex> second_fft = fft(second_half);
-    vector<Complex> result(N);
-    for (int k = 0; k < N/2; k++) {
-        result[k] = first_fft[k];
-        result[k + N/2] = second_fft[k];
-    }
-    
-    return result;
-}
-//обпф
-vector<Complex> ifft(const vector<Complex>& x) {
-    int N = x.size();
-    if (N == 1) {
-        return x;
-    }
-    
-    vector<Complex> first_half(N/2);
-    vector<Complex> second_half(N/2);
-    
-    for (int k = 0; k < N/2; k++) {
-        first_half[k] = x[k];
-        second_half[k] = x[k + N/2];
-    }
-    vector<Complex> first_ifft = ifft(first_half);
-    vector<Complex> second_ifft = ifft(second_half);
-    vector<Complex> result(N);
-    for (int k = 0; k < N/2; k++) {
-        double angle = 2.0 * PI * k / N;  
-        Complex twiddle = Complex(cos(angle), sin(angle));
-        result[k] = first_ifft[k] + twiddle * second_ifft[k];
-        result[k + N/2] = first_ifft[k] - twiddle * second_ifft[k];
-    }
-    
-    return result;
+// Вычисление поворотного коэффициента
+Complex twiddle(int j, int k, int n) {
+    double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+    return Complex(cos(angle), sin(angle));
 }
 
-// Масштабирование обратного БПФ 
-vector<Complex> scaleIFFT(const vector<Complex>& x) {
+// Прямое БПФ с прореживанием по частоте (по формулам из изображения)
+vector<Complex> fft_dif(const vector<Complex>& x) {
     int N = x.size();
-    vector<Complex> result = ifft(x);
+    int n = 0;
+    while ((1 << n) < N) n++;
     
-    for (int i = 0; i < N; i++) {
-        result[i] /= double(N);
+    vector<Complex> y = x;
+    
+    // k-й шаг (k = 1, 2, ..., n)
+    for (int k = 1; k <= n; k++) {
+        vector<Complex> temp(N);
+        
+        // Размер блока на текущем шаге
+        int block_size = 1 << k;           // 2^k
+        int half_block = 1 << (k - 1);     // 2^{k-1}
+        int num_blocks = N / block_size;
+        
+        for (int j = 0; j < num_blocks; j++) {
+            for (int l = 0; l < half_block; l++) {
+                int idx1 = j * block_size + l;              // j2^k + l
+                int idx2 = idx1 + half_block;               // j2^k + l + 2^{k-1}
+                
+                int src_idx1 = j * half_block + l;          // j2^{k-1} + l
+                int src_idx2 = src_idx1 + (N / 2);          // 2^{n-1} + j2^{k-1} + l
+                
+                // Бабочка согласно формулам:
+                // y(j2^k + l) = x(j2^{k-1} + l) + x(2^{n-1} + j2^{k-1} + l)
+                temp[idx1] = y[src_idx1] + y[src_idx2];
+                
+                // y(j2^k + l + 2^{k-1}) = [x(j2^{k-1} + l) - x(2^{n-1} + j2^{k-1} + l)] * ω_{n+1-k}^j
+                Complex diff = y[src_idx1] - y[src_idx2];
+                temp[idx2] = diff * twiddle(j, k, n);
+            }
+        }
+        
+        y = temp;
     }
     
-    return result;
+    return y;
+}
+
+// Обратное БПФ через комплексное сопряжение (по методике из изображения)
+vector<Complex> ifft_via_fft(const vector<Complex>& A) {
+    int N = A.size();
+    
+    // Шаг 1: U ← A̅ (комплексное сопряжение входного вектора)
+    vector<Complex> U(N);
+    for (int i = 0; i < N; i++) {
+        U[i] = conj(A[i]);
+    }
+    
+    // Шаг 2: V = 𝕎U (прямое БПФ от U)
+    vector<Complex> V = fft_dif(U);
+    
+    // Шаг 3: B ← V̅ (комплексное сопряжение результата)
+    vector<Complex> B(N);
+    for (int i = 0; i < N; i++) {
+        B[i] = conj(V[i]);
+    }
+    
+    // Масштабирование (деление на N)
+    for (int i = 0; i < N; i++) {
+        B[i] /= double(N);
+    }
+    
+    return B;
 }
 
 // Чтение бинарного файла
 vector<Complex> readBinaryFile(const string& filename) {
     ifstream file(filename, ios::binary | ios::ate);
+    if (!file.is_open()) {
+        cerr << "Ошибка: не могу открыть файл " << filename << endl;
+        return vector<Complex>();
+    }
+    
     streamsize size_bytes = file.tellg();
     file.seekg(0, ios::beg);
     
@@ -110,19 +123,40 @@ void writeBinaryFile(const vector<Complex>& data, const string& filename) {
 }
 
 int main() {
-    cout << "=== Быстрое преобразование Фурье (БПФ) ===" << endl;
+    cout << "=== БПФ с прореживанием по частоте ===" << endl;
     
     vector<Complex> input = readBinaryFile("performance_signals/переменный_64.bin");
-    cout << input.size() << " точек сигнала" << endl;
-    vector<Complex> fft_result = fft(input);
+    if (input.empty()) {
+        cerr << "Ошибка чтения файла!" << endl;
+        return 1;
+    }
+    
+    cout << "Прочитано " << input.size() << " точек сигнала" << endl;
+    
+    // Проверяем, что размер является степенью двойки
+    int N = input.size();
+    if ((N & (N - 1)) != 0) {
+        cerr << "Ошибка: размер сигнала должен быть степенью двойки!" << endl;
+        return 1;
+    }
+    
+    // Прямое БПФ
+    vector<Complex> fft_result = fft_dif(input);
     writeBinaryFile(fft_result, "результат_БПФ.bin");
-    vector<Complex> ifft_result = scaleIFFT(fft_result);
+    cout << "Прямое БПФ завершено" << endl;
+    
+    // Обратное БПФ через комплексное сопряжение
+    vector<Complex> ifft_result = ifft_via_fft(fft_result);
     writeBinaryFile(ifft_result, "результат_ОБПФ.bin");
+    cout << "Обратное БПФ завершено" << endl;
+    
+    // Проверка точности
     double max_error = 0.0;
     for (size_t i = 0; i < input.size(); i++) {
         double error = abs(input[i] - ifft_result[i]);
         if (error > max_error) max_error = error;
     }
+    
     cout << "Максимальная ошибка восстановления: " << max_error << endl;
     
     return 0;
