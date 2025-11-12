@@ -52,12 +52,12 @@ plt.show()
 
 print("L\tПрямая(мс)\tБПФ(мс)\tУскорение")
 print("-"*50)
-for _, row in case1.iterrows():
+for i row in case1.iterrows():
     speedup = row['Direct_Time'] / row['FFT_Time']
     print(f"{row['Size']}\t{row['Direct_Time']:.3f}\t\t{row['FFT_Time']:.3f}\t{speedup:.1f}x")
 
 print("N\tПрямая(мс)\tБПФ(мс)\tУскорение")
 print("-"*50)
-for _, row in case2.iterrows():
+for i row in case2.iterrows():
     speedup = row['Direct_Time'] / row['FFT_Time']
     print(f"{row['Size']}\t{row['Direct_Time']:.3f}\t\t{row['FFT_Time']:.3f}\t{speedup:.1f}x")

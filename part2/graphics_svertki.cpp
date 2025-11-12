@@ -14,21 +14,21 @@ const double PI = 3.14159265358979323846;
 class FFT_DIF {
 public:
     static Complex wk(int j, int k, int n) {
-        double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+        double angle = -2.0 * PI * j / pow(2, n + 1 - k);
         return Complex(cos(angle), sin(angle));
     }
 
     static Sequence fft_dif(const Sequence& x) {
         int N = x.size();
         int n = 0;
-        while ((1 << n) < N) n++;
+        while (pow(2, n) < N) n++;
         
         Sequence y = x;
         
         for (int k = 1; k <= n; k++) {
             Sequence temp(N);
-            int block_size = 1 << k;
-            int half_block = 1 << (k - 1);
+            int block_size = pow(2, k);
+            int half_block = pow(2, k - 1);
             int num_blocks = N / block_size;
             
             for (int j = 0; j < num_blocks; j++) {
