@@ -9,47 +9,35 @@ typedef complex<double> Complex;
 const double PI = 3.14;
 // поворотный коэффициент
 Complex wk(int j, int k, int n) {
-    double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+    double angle = -2.0 * PI * j / pow(2, n + 1 - k);
     return Complex(cos(angle), sin(angle));
 }
+
 // Прямое БПФ
 vector<Complex> fft_dif(const vector<Complex>& x) {
     int N = x.size();
     int n = 0;
-    while ((1 << n) < N) n++;
-    
+    while (pow(2, n) < N) n++;
     vector<Complex> y = x;
-    
-    // k-й шаг (k = 1, 2, ..., n)
     for (int k = 1; k <= n; k++) {
         vector<Complex> temp(N);
-        
-        // Размер блока на текущем шаге
-        int block_size = 1 << k;           // 2^k
-        int half_block = 1 << (k - 1);     // 2^{k-1}
+        int block_size = pow(2, k);          
+        int half_block = pow(2, k - 1);       
         int num_blocks = N / block_size;
         
         for (int j = 0; j < num_blocks; j++) {
             for (int l = 0; l < half_block; l++) {
-                int idx1 = j * block_size + l;              // j2^k + l
-                int idx2 = idx1 + half_block;               // j2^k + l + 2^{k-1}
-                
-                int src_idx1 = j * half_block + l;          // j2^{k-1} + l
-                int src_idx2 = src_idx1 + (N / 2);          // 2^{n-1} + j2^{k-1} + l
-                
-                // Бабочка согласно формулам:
-                // y(j2^k + l) = x(j2^{k-1} + l) + x(2^{n-1} + j2^{k-1} + l)
+                int idx1 = j * block_size + l;         
+                int idx2 = idx1 + half_block;   
+                int src_idx1 = j * half_block + l;        
+                int src_idx2 = src_idx1 + (N / 2); 
                 temp[idx1] = y[src_idx1] + y[src_idx2];
-                
-                // y(j2^k + l + 2^{k-1}) = [x(j2^{k-1} + l) - x(2^{n-1} + j2^{k-1} + l)] * ω_{n+1-k}^j
                 Complex diff = y[src_idx1] - y[src_idx2];
                 temp[idx2] = diff * wk(j, k, n);
             }
         }
-        
         y = temp;
     }
-    
     return y;
 }
 

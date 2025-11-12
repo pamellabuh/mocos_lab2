@@ -12,29 +12,33 @@ using namespace std::chrono;
 typedef complex<double> Complex;
 const double PI = 3.14159265358979323846;
 
-Complex twiddle(int j, int k, int n) {
-    double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+// поворотный коэффициент
+Complex wk(int j, int k, int n) {
+    double angle = -2.0 * PI * j / pow(2, n + 1 - k);
     return Complex(cos(angle), sin(angle));
 }
+
+// Прямое БПФ
 vector<Complex> fft_dif(const vector<Complex>& x) {
     int N = x.size();
     int n = 0;
-    while ((1 << n) < N) n++;
+    while (pow(2, n) < N) n++;
     vector<Complex> y = x;
     for (int k = 1; k <= n; k++) {
         vector<Complex> temp(N);
-        int block_size = 1 << k;  
-        int half_block = 1 << (k - 1);  
+        int block_size = pow(2, k);          
+        int half_block = pow(2, k - 1);       
         int num_blocks = N / block_size;
+        
         for (int j = 0; j < num_blocks; j++) {
             for (int l = 0; l < half_block; l++) {
-                int idx1 = j * block_size + l;          
-                int idx2 = idx1 + half_block;           
-                int src_idx1 = j * half_block + l;    
-                int src_idx2 = src_idx1 + (N / 2);       
+                int idx1 = j * block_size + l;         
+                int idx2 = idx1 + half_block;   
+                int src_idx1 = j * half_block + l;        
+                int src_idx2 = src_idx1 + (N / 2); 
                 temp[idx1] = y[src_idx1] + y[src_idx2];
                 Complex diff = y[src_idx1] - y[src_idx2];
-                temp[idx2] = diff * twiddle(j, k, n);
+                temp[idx2] = diff * wk(j, k, n);
             }
         }
         y = temp;
