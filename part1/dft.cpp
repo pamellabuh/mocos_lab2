@@ -7,7 +7,7 @@
 using namespace std;
 
 typedef complex<double> Complex;
-const double PI = 3.14159265358979323846;
+const double PI = 3.14;
 
 // Прямое ДПФ
 vector<Complex> computeDFT(const vector<Complex>& input) {

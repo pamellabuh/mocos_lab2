@@ -16,27 +16,18 @@ def read_binary_file(filename):
 def main():
     try:
         X = read_binary_file('performance_signals/переменный_1024.bin')
-        print(f"Размер сигнала: {X.shape}")
-        
-        # ИСПРАВЛЕНИЕ: убрать norm='ortho' для сравнения с БПФ C++
-        fft_numpy = np.fft.fft(X)  # БЕЗ масштабирования!
-        
+        print(f"Размер сигнала: {len(X)}")
+        fft_numpy = np.fft.fft(X)
         fft_cpp = read_binary_file('fft_result.bin')
         dft_cpp = read_binary_file('dft_result.bin')
-        
-        # Для ДПФ C++ нужно сравнить с масштабированным numpy
-        fft_numpy_scaled = np.fft.fft(X, norm='ortho')  # с масштабированием
-        
+        fft_numpy_scaled = np.fft.fft(X, norm='ortho')
         diff_fft = np.linalg.norm(fft_numpy - fft_cpp)
         diff_dft = np.linalg.norm(fft_numpy_scaled - dft_cpp)
-        
-        print(f"Норма разности numpy БПФ (без масшт.) и БПФ C++: {diff_fft:.6e}")
-        print(f"Норма разности numpy БПФ (ortho) и ДПФ C++: {diff_dft:.6e}")
+        print(f"Норма разности numpy БПФ и БПФ C++: {diff_fft:.6e}")
+        print(f"Норма разности numpy БПФ и ДПФ C++: {diff_dft:.6e}")
         
     except FileNotFoundError as e:
         print(f"Ошибка: Файл не найден - {e}")
-    except Exception as e:
-        print(f"Ошибка: {e}")
 
 if __name__ == "__main__":
     main()

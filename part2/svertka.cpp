@@ -5,9 +5,6 @@
 
 Sequence load_signal(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file: " + filename);
-    }
     size_t size_bytes = file.tellg();
     file.seekg(0, std::ios::beg);
     

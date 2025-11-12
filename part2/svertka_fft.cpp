@@ -3,146 +3,149 @@
 #include <vector>
 #include <complex>
 #include <cmath>
-#include <chrono>
 #include <algorithm>
+using namespace std;
 
-typedef std::complex<double> Complex;
-typedef std::vector<Complex> Sequence;
-
-Sequence fft(const Sequence& x) {
-    size_t N = x.size();
-    if (N == 1) return x;
-    
-    Sequence first_half(N/2);
-    Sequence second_half(N/2);
-    
-    for (size_t k = 0; k < N/2; ++k) {
-        first_half[k] = x[k] + x[k + N/2];
-        Complex temp = x[k] - x[k + N/2];
-        double angle = -2.0 * M_PI * k / N;
-        second_half[k] = temp * Complex(std::cos(angle), std::sin(angle));
-    }
-    
-    Sequence first_fft = fft(first_half);
-    Sequence second_fft = fft(second_half);
-    
-    Sequence result(N);
-    for (size_t k = 0; k < N/2; ++k) {
-        result[k] = first_fft[k];
-        result[k + N/2] = second_fft[k];
-    }
-    
-    return result;
+typedef complex<double> Complex;
+const double PI = 3.14159265358979323846;
+Complex wk(int j, int k, int n) {
+    double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+    return Complex(cos(angle), sin(angle));
 }
 
-Sequence ifft(const Sequence& x) {
-    size_t N = x.size();
-    if (N == 1) return x;
+vector<Complex> fft_dif(const vector<Complex>& x) {
+    int N = x.size();
+    int n = 0;
+    while ((1 << n) < N) n++;
     
-    Sequence first_half(N/2);
-    Sequence second_half(N/2);
+    vector<Complex> y = x;
     
-    for (size_t k = 0; k < N/2; ++k) {
-        first_half[k] = x[k];
-        second_half[k] = x[k + N/2];
+    for (int k = 1; k <= n; k++) {
+        vector<Complex> temp(N);
+        int block_size = 1 << k;
+        int half_block = 1 << (k - 1);
+        int num_blocks = N / block_size;
+        
+        for (int j = 0; j < num_blocks; j++) {
+            for (int l = 0; l < half_block; l++) {
+                int idx1 = j * block_size + l;
+                int idx2 = idx1 + half_block;
+                int src_idx1 = j * half_block + l;
+                int src_idx2 = src_idx1 + (N / 2);
+                
+                temp[idx1] = y[src_idx1] + y[src_idx2];
+                Complex diff = y[src_idx1] - y[src_idx2];
+                temp[idx2] = diff * wk(j, k, n);
+            }
+        }
+        y = temp;
     }
-    
-    Sequence first_ifft = ifft(first_half);
-    Sequence second_ifft = ifft(second_half);
-    
-    Sequence result(N);
-    for (size_t k = 0; k < N/2; ++k) {
-        double angle = 2.0 * M_PI * k / N;
-        Complex twiddle = Complex(std::cos(angle), std::sin(angle));
-        result[k] = first_ifft[k] + twiddle * second_ifft[k];
-        result[k + N/2] = first_ifft[k] - twiddle * second_ifft[k];
+    return y;
+}
+vector<Complex> ifft_via_fft(const vector<Complex>& A) {
+    int N = A.size();
+    vector<Complex> U(N);
+    for (int i = 0; i < N; i++) {
+        U[i] = conj(A[i]);
     }
-    
-    return result;
+    vector<Complex> V = fft_dif(U);
+    vector<Complex> B(N);
+    for (int i = 0; i < N; i++) {
+        B[i] = conj(V[i]);
+    }
+    for (int i = 0; i < N; i++) {
+        B[i] /= double(N);
+    }
+    return B;
 }
 
-size_t next_power_of_two(size_t n) {
-    size_t power = 1;
-    while (power < n) {
-        power <<= 1;
-    }
-    return power;
-}
-
-Sequence fft_convolution(const Sequence& x, const Sequence& y) {
-    size_t M = x.size();
+vector<Complex> fft_convolution_exact(const vector<Complex>& x, const vector<Complex>& y) {
+    size_t M = x.size();  
     size_t L = y.size();
     size_t Lu = M + L - 1;
     
-
-    size_t N_required = std::max(2 * L, 2 * M);
-    size_t N = next_power_of_two(N_required);
-
-    Sequence X = x;
-    X.resize(N, Complex(0.0, 0.0));
-    Sequence Y = y;
-    Y.resize(N, Complex(0.0, 0.0));
-    
-    Sequence X_hat = fft(X);
-    Sequence Y_hat = fft(Y);
-    
-    Sequence U_hat(N);
-    double scale = std::sqrt(2.0 * N);
-    for (size_t i = 0; i < N; ++i) {
-        U_hat[i] = scale * X_hat[i] * Y_hat[i];
+    cout << "Lu : " << Lu << endl;
+    size_t N_required = max(2 * L, 2 * M);
+    size_t N = 1;
+    while (N < N_required) {
+        N <<= 1;
     }
-
-    Sequence U = ifft(U_hat);
-
-    Sequence result(Lu);
-    for (size_t i = 0; i < Lu; ++i) {
+    cout << "N : " << N << endl;
+    vector<Complex> X_extended(N, Complex(0.0, 0.0));
+    vector<Complex> Y_extended(N, Complex(0.0, 0.0));
+    for (size_t i = 0; i < M; i++) {
+        X_extended[i] = x[i];
+    }
+    for (size_t i = 0; i < L; i++) {
+        Y_extended[i] = y[i];
+    }
+    vector<Complex> X_hat = fft_dif(X_extended);
+    vector<Complex> Y_hat = fft_dif(Y_extended);
+    vector<Complex> U_hat(N); 
+    for (size_t i = 0; i < N; i++) {
+        U_hat[i] = X_hat[i] * Y_hat[i];
+    }
+    vector<Complex> U = ifft_via_fft(U_hat);
+    vector<Complex> result(Lu);
+    for (size_t i = 0; i < Lu; i++) {
         result[i] = U[i];
     }
     
     return result;
 }
-
-
-Sequence load_signal(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file: " + filename);
+vector<Complex> linear_convolution(const vector<Complex>& x, const vector<Complex>& y) {
+    size_t M = x.size();
+    size_t L = y.size();
+    size_t Lu = M + L - 1;
+    
+    vector<Complex> u(Lu, Complex(0.0, 0.0));
+    
+    for (size_t n = 0; n < Lu; n++) {
+        Complex sum(0.0, 0.0);
+        for (size_t k = 0; k < M; k++) {
+            if (n >= k && (n - k) < L) {
+                sum += x[k] * y[n - k];
+            }
+        }
+        u[n] = sum;
     }
-    
-    size_t size_bytes = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    size_t num_doubles = size_bytes / sizeof(double);
-    size_t N = num_doubles / 2;
-    
-    std::vector<double> buffer(num_doubles);
-    file.read(reinterpret_cast<char*>(buffer.data()), size_bytes);
+    return u;
+}
+vector<Complex> readBinaryFile(const string& filename) {
+    ifstream file(filename, ios::binary | ios::ate);
+    streamsize size_bytes = file.tellg();
+    file.seekg(0, ios::beg);
+    int num_doubles = size_bytes / sizeof(double);
+    int N = num_doubles / 2;
+    vector<double> buffer(num_doubles);
+    file.read((char*)buffer.data(), size_bytes);
     file.close();
-    
-    Sequence signal(N);
-    for (size_t i = 0; i < N; ++i) {
-        signal[i] = Complex(buffer[2 * i], buffer[2 * i + 1]);
+    vector<Complex> signal(N);
+    for (int i = 0; i < N; i++) {
+        signal[i] = Complex(buffer[2*i], buffer[2*i+1]);
     }
-    
     return signal;
 }
 
-int main() {
+int main() {    
     try {
-
-        Sequence x = load_signal("performance_signals/переменный_1024.bin");
-        Sequence y = load_signal("performance_signals/фиксированный_512.bin");
-        
-        std::cout << "x длиной: " << x.size() << std::endl;
-        std::cout << "y длиной: " << y.size() << std::endl;
-
-        Sequence u = fft_convolution(x, y);
-        std::cout << "Результат свертки длиной: " << u.size() << std::endl;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Ошибка: " << e.what() << std::endl;
+        vector<Complex> x = readBinaryFile("performance_signals/переменный_64.bin");
+        vector<Complex> y = readBinaryFile("performance_signals/фиксированный_512.bin");
+        cout << "x: " << x.size() << " точек" << endl;
+        cout << "y: " << y.size() << " точек" << endl;
+        vector<Complex> fft_conv = fft_convolution_exact(x, y);
+        cout << "Быстрая свертка: " << fft_conv.size() << " точек" << endl;
+        vector<Complex> linear_conv = linear_convolution(x, y);
+        cout << "Линейная свертка: " << linear_conv.size() << " точек" << endl;
+        double max_error = 0.0;
+        for (size_t i = 0; i < fft_conv.size(); i++) {
+            double error = abs(fft_conv[i] - linear_conv[i]);
+            if (error > max_error) max_error = error;
+        }
+        cout << "Максимальная ошибка между методами: " << max_error << endl;
+    } catch (const exception& e) {
+        cerr << "Ошибка: " << e.what() << endl;
         return 1;
     }
-    
     return 0;
 }

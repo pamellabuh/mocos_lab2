@@ -10,6 +10,62 @@
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Sequence;
 
+const double PI = 3.14159265358979323846;
+class FFT_DIF {
+public:
+    static Complex wk(int j, int k, int n) {
+        double angle = -2.0 * PI * j / (1 << (n + 1 - k));
+        return Complex(cos(angle), sin(angle));
+    }
+
+    static Sequence fft_dif(const Sequence& x) {
+        int N = x.size();
+        int n = 0;
+        while ((1 << n) < N) n++;
+        
+        Sequence y = x;
+        
+        for (int k = 1; k <= n; k++) {
+            Sequence temp(N);
+            int block_size = 1 << k;
+            int half_block = 1 << (k - 1);
+            int num_blocks = N / block_size;
+            
+            for (int j = 0; j < num_blocks; j++) {
+                for (int l = 0; l < half_block; l++) {
+                    int idx1 = j * block_size + l;
+                    int idx2 = idx1 + half_block;
+                    int src_idx1 = j * half_block + l;
+                    int src_idx2 = src_idx1 + (N / 2);
+                    
+                    temp[idx1] = y[src_idx1] + y[src_idx2];
+                    Complex diff = y[src_idx1] - y[src_idx2];
+                    temp[idx2] = diff * wk(j, k, n);
+                }
+            }
+            y = temp;
+        }
+        return y;
+    }
+
+    static Sequence ifft_via_fft(const Sequence& A) {
+        int N = A.size();
+        Sequence U(N);
+        for (int i = 0; i < N; i++) {
+            U[i] = std::conj(A[i]);
+        }
+        Sequence V = fft_dif(U);
+        Sequence B(N);
+        for (int i = 0; i < N; i++) {
+            B[i] = std::conj(V[i]);
+        }
+        for (int i = 0; i < N; i++) {
+            B[i] /= double(N);
+        }
+        return B;
+    }
+};
+
 class Convolution {
 public:
     static Sequence linear_convolution(const Sequence& x, const Sequence& y) {
@@ -32,7 +88,6 @@ public:
     }
 };
 
-// БПФ-свертка
 class FFTConvolution {
 public:
     static size_t next_power_of_two(size_t n) {
@@ -43,89 +98,26 @@ public:
         return power;
     }
     
-    static Sequence fft(const Sequence& x) {
-        size_t N = x.size();
-        if (N <= 1) return x;
-        
-        Sequence even(N/2);
-        Sequence odd(N/2);
-        
-        for (size_t i = 0; i < N/2; ++i) {
-            even[i] = x[2*i];
-            odd[i] = x[2*i + 1];
-        }
-        
-        Sequence even_fft = fft(even);
-        Sequence odd_fft = fft(odd);
-        
-        Sequence result(N);
-        for (size_t k = 0; k < N/2; ++k) {
-            double angle = -2.0 * M_PI * k / N;
-            Complex twiddle = Complex(cos(angle), sin(angle));
-            result[k] = even_fft[k] + twiddle * odd_fft[k];
-            result[k + N/2] = even_fft[k] - twiddle * odd_fft[k];
-        }
-        
-        return result;
-    }
-    
-    static Sequence ifft(const Sequence& x) {
-        size_t N = x.size();
-        if (N <= 1) return x;
-        
-        Sequence even(N/2);
-        Sequence odd(N/2);
-        
-        for (size_t i = 0; i < N/2; ++i) {
-            even[i] = x[2*i];
-            odd[i] = x[2*i + 1];
-        }
-        
-        Sequence even_ifft = ifft(even);
-        Sequence odd_ifft = ifft(odd);
-        
-        Sequence result(N);
-        for (size_t k = 0; k < N/2; ++k) {
-            double angle = 2.0 * M_PI * k / N;
-            Complex twiddle = Complex(cos(angle), sin(angle));
-            result[k] = even_ifft[k] + twiddle * odd_ifft[k];
-            result[k + N/2] = even_ifft[k] - twiddle * odd_ifft[k];
-        }
-        
-        return result;
-    }
-    
-    static Sequence scale_ifft(const Sequence& x) {
-        size_t N = x.size();
-        Sequence result = ifft(x);
-        for (size_t i = 0; i < N; ++i) {
-            result[i] /= double(N);
-        }
-        return result;
-    }
-    
     static Sequence fft_convolution(const Sequence& x, const Sequence& y) {
         size_t M = x.size();
         size_t L = y.size();
         size_t Lu = M + L - 1;
-        
-        size_t N = next_power_of_two(Lu);
+        size_t N_required = std::max(2 * L, 2 * M);
+        size_t N = next_power_of_two(N_required);
         
         Sequence x_padded = x;
         x_padded.resize(N, Complex(0.0, 0.0));
-        
         Sequence y_padded = y;
         y_padded.resize(N, Complex(0.0, 0.0));
-        
-        Sequence X = fft(x_padded);
-        Sequence Y = fft(y_padded);
+        Sequence X = FFT_DIF::fft_dif(x_padded);
+        Sequence Y = FFT_DIF::fft_dif(y_padded);
         
         Sequence U_hat(N);
         for (size_t i = 0; i < N; ++i) {
             U_hat[i] = X[i] * Y[i];
         }
         
-        Sequence U_padded = scale_ifft(U_hat);
+        Sequence U_padded = FFT_DIF::ifft_via_fft(U_hat);
         
         Sequence result(Lu);
         for (size_t i = 0; i < Lu; ++i) {
@@ -137,7 +129,7 @@ public:
 };
 
 Sequence load_signal(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
+    std::ifstream file(filename, std::ios::binary | std::ios::ate);   
     if (!file.is_open()) {
         throw std::runtime_error("Cannot open file: " + filename);
     }
@@ -159,9 +151,11 @@ Sequence load_signal(const std::string& filename) {
     
     return signal;
 }
+
 std::pair<double, double> measure_convolution_time(const Sequence& x, const Sequence& y, int iterations = 3) {
     double time_direct = 0.0;
     double time_fft = 0.0;
+    
     for (int i = 0; i < iterations; ++i) {
         auto start = std::chrono::high_resolution_clock::now();
         Sequence result = Convolution::linear_convolution(x, y);
@@ -184,15 +178,12 @@ std::pair<double, double> measure_convolution_time(const Sequence& x, const Sequ
 int main() {
     const std::vector<int> SIZES = {64, 128, 256, 512, 1024, 2048, 4096};
     const int ITERATIONS = 3;
-
     Sequence fixed_signal;
-    try {
-        fixed_signal = load_signal("performance_signals/фиксированный_512.bin");
-        std::cout << "Загружен фиксированный сигнал длиной: " << fixed_signal.size() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Не удалось загрузить фиксированный сигнал: " << e.what() << std::endl;
-        return 1;
-    }
+    fixed_signal = load_signal("performance_signals/фиксированный_512.bin");
+    std::cout << "Загружен фиксированный сигнал длиной: " << fixed_signal.size() << std::endl;
+    
+    // Случай 1: Фиксированная длина M=512, переменная длина L
+    std::cout << "Случай 1: M=512 (фиксированная), L - переменная" << std::endl;
     std::cout << std::setw(8) << "L" << std::setw(15) << "Direct (ms)" 
               << std::setw(15) << "FFT (ms)" << std::endl;
     
@@ -205,9 +196,6 @@ int main() {
             Sequence var_signal = load_signal(filename);
             
             auto times = measure_convolution_time(fixed_signal, var_signal, ITERATIONS);
-            
-            size_t Lu = fixed_signal.size() + var_signal.size() - 1;
-
             
             std::cout << std::setw(8) << size 
                       << std::setw(15) << std::fixed << std::setprecision(3) << times.first
@@ -222,6 +210,8 @@ int main() {
         }
     }
     
+    // Случай 2: Обе длины переменные и одинаковые
+    std::cout << "\nСлучай 2: M = L = N (обе переменные и одинаковые)" << std::endl;
     std::cout << std::setw(8) << "N" << std::setw(15) << "Direct (ms)" 
               << std::setw(15) << "FFT (ms)"  << std::endl;
     
@@ -232,11 +222,9 @@ int main() {
         try {
             std::string filename = "performance_signals/переменный_" + std::to_string(size) + ".bin";
             Sequence signal1 = load_signal(filename);
-            Sequence signal2 = load_signal(filename);  // Используем тот же сигнал
+            Sequence signal2 = load_signal(filename);  
             
             auto times = measure_convolution_time(signal1, signal2, ITERATIONS);
-            
-            size_t Lu = signal1.size() + signal2.size() - 1;
             
             std::cout << std::setw(8) << size 
                       << std::setw(15) << std::fixed << std::setprecision(3) << times.first
@@ -250,7 +238,6 @@ int main() {
             std::cerr << "Ошибка при размере " << size << ": " << e.what() << std::endl;
         }
     }
-
     std::ofstream file("convolution_performance.csv");
     file << "Case,Size,Direct_Time,FFT_Time\n";
 
@@ -262,7 +249,6 @@ int main() {
         file << "Variable_Both," << case2_sizes[i] << "," << case2_direct[i] << "," << case2_fft[i] << "\n";
     }
     
-    file.close();
-    
+    file.close();   
     return 0;
 }
